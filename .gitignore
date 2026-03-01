@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+yt/
+
+# Environment files
+.env
+
+# Jupyter / data / artifacts
+.ipynb_checkpoints/
+data/
+mlruns/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Dokümantasyon (repo'da sadece README yeterli; docs/ pushlanmaz)
+docs/
+
