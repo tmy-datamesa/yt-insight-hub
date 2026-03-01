@@ -4,7 +4,7 @@
 
 YouTube videolarındaki yorumları toplayan, LLM ile duygu/konu/aspect analizi yapan ve sonuçları **Streamlit** ile görselleştiren bir projedir. Veri **BigQuery**’de saklanır; isteğe bağlı **Looker Studio** ile raporlanabilir.
 
-[image.png](https://lookerstudio.google.com/s/gbf4u5q04WM)
+<img width="1015" height="1439" alt="image" src="https://github.com/user-attachments/assets/3f401369-55f1-41d9-81a9-8ae636823e3f" />
 
 ---
 
