@@ -5,7 +5,27 @@ ile birlikte netleştirmek amacıyla hazırlanmıştır.
 
 ---
 
-## 1. Ürün fikri (high-level)
+##Özet
+
+### Ürün problemi
+- **Ne:** YouTube teknoloji videolarındaki yorumlar ham metin; konu, duygu, hangi özellikten bahsedildiği ve satın alma niyeti/soru gibi sinyaller otomatik çıkarılmıyor.
+- **Kime:** İçerik üreticileri, markalar; “izleyici ne düşünüyor, hangi konularda şikayet/övgü var?” sorusuna yanıt.
+- **Çözüm:** Yorumları çek → temizle → LLM ile yapılandırılmış etiketle (topic, aspect, sentiment, evidence, stratejik sinyaller) → BigQuery’de sakla → dashboard/raporla.
+
+### Veri akışı 
+1. **YouTube API** → ham yorumlar ve video istatistikleri **BigQuery raw** katmanına yazılıyor.
+2. **Curate** adımı metni temizliyor (Türkçe normalizasyon, dil tespiti); **core** katmanına gidiyor.
+3. **LLM** (gpt-4o-mini) core’daki metni okuyor; topic, aspect’ler, sentiment, kanıt ve sinyaller üretip **ml** katmanına yazılıyor; oradan Streamlit / Looker’a sunuluyor.
+
+### Sistem tasarımı 
+- **Tek kaynak, tek pipeline:** Veri YouTube API’den; akış fetch → curate → inference → raporlama; tekrar çalıştırılabilir, adımlar idempotent.
+- **Katmanlı veri:** raw (ham) → core (temiz metin) → ml (LLM çıktısı); klasik DW pattern (staging → curated → marts).
+- **LLM’i “kontrollü” kullanmak:** Kapalı ontoloji (sabit topic/aspect listesi), düşük temperature, iki aşamalı CoT + JSON; serbest metin değil, yapılandırılmış çıktı.
+- **Üretim-benzeri ama MVP:** BigQuery + Python + Make; taşınabilir modüler adımlar.
+
+---
+
+## 1. Ürün fikri 
 
 **YT Insight Hub**, YouTube teknoloji videoları altındaki yorumları:
 
@@ -19,9 +39,6 @@ ile birlikte netleştirmek amacıyla hazırlanmıştır.
   üretir,
 - Çıktıyı Streamlit dashboard ve Looker Studio raporları üzerinden sunar.
 
-Bu, “conversational analytics” yaklaşımının YouTube yorum verisine uygulanmış,
-uçtan uca çalışan bir mini ürünüdür.
-
 ### 1.1. Tasarım hedefleri ve kısıtlar
 
 - **Tek kaynak, tek pipeline**  
@@ -29,12 +46,11 @@ uçtan uca çalışan bir mini ürünüdür.
   - Tüm işleme adımları (fetch → curate → inference → raporlama) tek, tekrar çalıştırılabilir bir pipeline olarak kurgulanmıştır.
 
 - **Basit ama üretim-benzeri mimari**  
-  - BigQuery dataset’leri klasik `raw / core / ml` pattern’i ile ayrılmıştır.  
-  - Bu, CTO’ya “büyütülebilir bir iskelet” gösterirken, akademik tarafta da veri katmanlaştırma prensiplerini sergiler.
+  - BigQuery dataset’leri `raw / core / ml` ile ayrılmıştır.  
 
 - **LLM’i “kontrollü extractor” olarak kullanmak**  
-  - Serbest generatif çıktılardan kaçınmak; bunun yerine kapalı ontoloji (TOPICS, ASPECTS) ve JSON output ile, LLM’i etiketleyici/özetleyici gibi kullanmak.  
-  - Temperature düşük (varsayılan 0.0) tutulur; CoT + JSON schema ile deterministik davranış hedeflenir.
+  - Serbest generatif çıktılardan kaçınmak bunun yerine kapalı ontoloji (TOPICS, ASPECTS) ve JSON output ile, LLM’i etiketleyici/özetleyici gibi kullanmak.  
+  - Temperature düşük (varsayılan 0.0) tutulur, CoT + JSON schema ile deterministik davranış hedeflenir.
 
 - **Maliyet / sadelik dengesi**  
   - Proje bir araştırma/MVP olduğundan, inference tarafında (özellikle CoT + per‑aspect çağrılar) maliyet optimizasyonu ikincil önceliktedir.  
@@ -91,13 +107,13 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A[make fetch-comments<br/>VIDEO_ID=...] --> B[yt_insight_raw.comments<br/>+ video_stats]
-    B --> C[make curate-comments<br/>(curate_comments.py)]
+    A[make fetch-comments VIDEO_ID] --> B[yt_insight_raw.comments + video_stats]
+    B --> C[make curate-comments - curate_comments.py]
     C --> D[yt_insight_core.comments_curated]
-    D --> E[make run-inference<br/>VIDEO_ID=...<br/>(comment_insights.py)]
+    D --> E[make run-inference - comment_insights.py]
     E --> F[yt_insight_ml.comment_insights]
-    F --> G[Views:<br/>comment_insights_report,<br/>aspect_sentiment_report,<br/>comment_ngrams]
-    G --> H[make streamlit<br/>(frontend/app.py)]
+    F --> G[Views: comment_insights_report aspect_sentiment_report comment_ngrams]
+    G --> H[make streamlit - frontend app.py]
 ```
 
 **Teknik açıklama:**
@@ -120,12 +136,11 @@ flowchart TD
   - `aspect_sentiment_report`: aspects dizisini satır satır açan view; aspect × sentiment analizi.
   - `comment_ngrams`: n-gram sayımları; kelime bulutu / sık ifadeler için.
 
-Bu akışın tamamı `Makefile` üzerinden çağrılabiliyor; MVP için yeterli, gerektiğinde
-Airflow / Cloud Composer gibi orkestratörlere taşınabilir.
+Bu akışın tamamı `Makefile` üzerinden çağrılabiliyor.
 
 ---
 
-## 4. BigQuery veri modeli (ER perspektifi)
+## 4. BigQuery veri modeli 
 
 ```mermaid
 erDiagram
@@ -321,11 +336,11 @@ konumlandırmayı hedefliyor.
 
 ```mermaid
 flowchart LR
-    RAWL[LLM raw labels<br/>(topic, aspect)] --> NORM[normalize_topic / normalize_aspect]
-    NORM -->|known| FINAL[Canonical labels<br/>TOPICS / ASPECTS]
-    NORM -->|alias| ALIAS[Alias map<br/>("ses"→audio,<br/>"sd kart"→storage)]
+    RAWL[LLM raw labels - topic, aspect] --> NORM[normalize_topic / normalize_aspect]
+    NORM -->|known| FINAL[Canonical labels - TOPICS / ASPECTS]
+    NORM -->|alias| ALIAS[Alias map - ses→audio, sd kart→storage]
     ALIAS --> FINAL
-    NORM -->|unknown| OTHER["topic=offtopic<br/>veya<br/>aspect=other"]
+    NORM -->|unknown| OTHER[topic offtopic veya aspect other]
 ```
 
 - Tüm topic/aspect seti **tek yerde** tanımlı: `backend/inference/ontology.py`.
@@ -339,23 +354,23 @@ Bu sayede:
 - LLM çıktısı ne üretirse üretsin, downstream tarafında her zaman
   **dar ve tahmin edilebilir bir label uzayı** var.
 - “other” oranı, ontolojinin yeterliliğini ölçmek için doğal bir kalite metriği
-  haline geliyor; gerektiğinde yeni aspect’ler (ör. `storage`, `customer_service`) eklenerek
+  haline geliyor gerektiğinde yeni aspect’ler (ör. `storage`, `customer_service`) eklenerek
   bu alan daraltılabiliyor.
 
 ---
 
-## 7. Tasarım tercihleri ve trade-off’lar (CTO / akademik perspektif)
+## 7. Tasarım tercihleri ve trade-off’lar 
 
 ### 7.1. Neden BigQuery + Python, ayrı bir orkestratör yerine?
 
 - **BigQuery avantajları:**
-  - Sorgu dili SQL, ekipler için zaten bilinen bir araç; join ve view tanımlarıyla veri modelini açıkça ifade eder.  
+  - Sorgu dili SQL, bilinen bir araç, join ve view tanımlarıyla veri modelini açıkça ifade eder.  
   - `raw/core/ml` dataset ayrımı, hem veri bilimi (feature store, tekrar oynatma) hem de raporlama için klasik bir DW yaklaşımıdır.
 - **Python script + Make yerine Airflow?**
   - Bu proje MVP/araştırma amaçlı olduğundan, operasyonel karmaşıklığı düşük tutmak için:
     - Her adım tek bir Python modülüdür (`fetch_youtube_comments`, `curate_comments`, `comment_insights`).  
     - Orkestrasyon, CI/CD veya cron tarafından çağrılabilecek basit `make` hedefleri ile yapılır.
-  - CTO açısından: Gerektiğinde bu adımlar kolayca Airflow/Cloud Composer DAG’lerine taşınabilir; fonksiyon sınırları ve BigQuery arayüzleri buna göre tasarlanmıştır.
+  - Gerektiğinde bu adımlar kolayca Airflow/Cloud Composer DAG’lerine taşınabilir, fonksiyon sınırları ve BigQuery arayüzleri buna göre tasarlanmıştır.
 
 ### 7.2. Neden iki aşamalı CoT, tek büyük prompt değil?
 
@@ -373,12 +388,12 @@ Bu sayede:
 
 - Gerçek kullanıcı yorumları sıklıkla “karma”dır:
   - Örn. “Kamerası çok iyi ama fiyatı uçuk” → aynı yorumda hem pozitif hem negatif signal.  
-  - Sadece `positive/negative/neutral` ile bu nüans kaybolur; neutral “ne olumlu ne olumsuz” ile “hem olumlu hem olumsuz”u karıştırır.
+  - Sadece `positive/negative/neutral` ile bu nüans kayboluyor ve neutral “ne olumlu ne olumsuz” ile “hem olumlu hem olumsuz”u karıştırır.
 - Çözüm:
   - Genel sentiment için dörtlü bir skala: `positive / negative / neutral / mixed`.  
   - Aspect seviyesinde de aynı set desteklenir; böylece hem “karışık ürün deneyimi” hem de “karışık aspect” ayrı ayrı ifade edilebilir.
 - Trade‑off:
-  - Dashboard ve raporlama tarafında bir sentiment seviyesi daha yönetilmesi gerekir, ancak iş tarafına sunulan içgörü (özellikle şikâyet/övgü ayrımı) daha zengin hale gelir.
+  - Dashboard ve raporlama tarafında bir sentiment seviyesi daha yönetilmesi gerekir, ancak iş tarafına sunulan içgörü (özellikle şikayet/övgü ayrımı) daha zengin hale gelir.
 
 ### 7.4. Neden ontoloji + normalizasyon bu kadar merkezi?
 
@@ -386,7 +401,7 @@ Bu sayede:
   - Topic/aspect değerleri tek yerde (`ontology.py`) tutulur; prompt, normalizasyon fonksiyonları ve raporlama bunu paylaşır.  
   - Bu, isim drift’ini engeller (örn. `channel_quality` yerine her yerde `channel_trust` kullanımı).
 - **Alias haritaları:**  
-  - Eğitim/deneme sırasında farklı isimler (örn. `ses`, `wifi`, `fiyat_performans`) gözlendi; alias sözlüğü bu varyantları canonical forma map eder.  
+  - Eğitim/deneme sırasında farklı isimler (örn. `ses`, `wifi`, `fiyat_performans`) gözlendi, alias sözlüğü bu varyantları canonical forma map eder.  
   - Böylece LLM’den gelen “garip ama anlamlı” etiketler veri ambarında normalize edilmiş olarak saklanır.
 
 ### 7.5. Idempotency, tekrar çalıştırma ve versiyonlama
@@ -397,14 +412,14 @@ Bu sayede:
   - `comment_insights`: `LEFT JOIN comment_insights` + `model_name` filtresiyle, aynı model için zaten işlenmiş yorumları atlar.
 - **Versiyonlama:**
   - `model_name` ve `inference_ts`, hem hangi modelin kullanıldığını hem de son run zamanını izlemeyi sağlar.  
-  - `comment_insights_report` view’i, aynı yorum için her zaman **son run**’ı (max `inference_ts`) seçer; böylece yeni prompt/model denemeleri doğal şekilde devreye girer.
+  - `comment_insights_report` view’i, aynı yorum için her zaman **son run**’ı (max `inference_ts`) seçer böylece yeni prompt/model denemeleri doğal şekilde devreye girer.
 
 ### 7.6. Sınırlar ve gelecekteki geliştirmeler
 
 - **Şu an yapılmayanlar:**
   - Online/streaming inference (pipeline batch odaklıdır).  
-  - Gelişmiş eval pipeline’ı (gold labels + metrikler) bu repodan ayrılmıştır; sadece production‑benzeri inference akışı bırakılmıştır.
+  - Gelişmiş eval pipeline’ı (gold labels + metrikler) bu repodan ayrılmıştır sadece production‑benzeri inference akışı bırakılmıştır.
 - **Gelecek için açık kapılar:**
   - Farklı LLM sağlayıcıları veya model versiyonları için `model_name` üzerinden A/B karşılaştırma.  
   - Daha gelişmiş intent sınıfları (örn. churn risk, upsell intent) için ek boolean/çoklu label alanları.  
-  - Airflow/Cloud Composer DAG’leriyle zamanlanmış, hata toleranslı pipeline’lar.
+
