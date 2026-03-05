@@ -5,7 +5,7 @@ ile birlikte netleştirmek amacıyla hazırlanmıştır.
 
 ---
 
-##Özet
+## Özet
 
 ### Ürün problemi
 - **Ne:** YouTube teknoloji videolarındaki yorumlar ham metin; konu, duygu, hangi özellikten bahsedildiği ve satın alma niyeti/soru gibi sinyaller otomatik çıkarılmıyor.
