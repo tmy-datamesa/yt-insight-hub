@@ -26,3 +26,7 @@ mlruns/
 # Dokümantasyon (repo'da sadece README yeterli; docs/ pushlanmaz)
 docs/
 
+.pytest_cache/
+*.log
+
+.cursor/

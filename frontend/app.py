@@ -3,7 +3,6 @@ Streamlit dashboard: video seç → özet metrikler, sentiment/topic grafikleri,
 Veri: BigQuery (load_videos, load_insights). Çalıştırma: make streamlit
 """
 
-import os
 import pandas as pd
 import streamlit as st
 from google.cloud import bigquery

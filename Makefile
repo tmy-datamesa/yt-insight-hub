@@ -1,7 +1,7 @@
 VENV_NAME ?= yt
 VENV_BIN := $(VENV_NAME)/bin
 
-.PHONY: venv install bq-setup fetch-comments fetch-comments-channel curate-comments run-inference streamlit clear-insights build-ngrams
+.PHONY: venv install bq-setup fetch-comments fetch-comments-channel curate-comments run-inference streamlit clear-insights
 
 venv:
 	python -m venv $(VENV_NAME)
@@ -34,8 +34,4 @@ streamlit:
 # Tüm inference kayıtlarını siler (temiz başlangıç). Geri alınamaz.
 clear-insights:
 	$(VENV_BIN)/python -m backend.config.clear_insights
-
-# N-gram tablosunu doldurur (kelime bulutu / bigram / trigram). comment_insights_report'tan okur.
-build-ngrams:
-	$(VENV_BIN)/python -m backend.analytics.build_ngrams
 

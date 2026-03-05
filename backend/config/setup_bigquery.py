@@ -32,7 +32,7 @@ def ensure_datasets(client: bigquery.Client) -> None:
     """
     Raw, core ve ml dataset'lerini oluşturur.
 
-    Dataset zaten varsa atlanır; yoksa belirtilen location ile oluşturulur.
+    Dataset zaten varsa atlanır yoksa belirtilen location ile oluşturulur.
     """
     for dataset_id in {
         gcp_settings.dataset_raw,

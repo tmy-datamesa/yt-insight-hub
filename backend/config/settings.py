@@ -53,7 +53,10 @@ class OpenAISettings:
 
     api_key: str = os.getenv("OPENAI_API_KEY", "")
     model_name: str = os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini")
-    temperature: float = float(os.getenv("OPENAI_TEMPERATURE", "0.1"))
+    # Sınıflandırma ve yapılandırılmış çıktı için temperature varsayılanı 0.0
+    temperature: float = float(os.getenv("OPENAI_TEMPERATURE", "0.0"))
+    # Force-choice: 1 ise promptta "Asla nötr kullanma, pozitif veya negatif seç" kuralı kullanılır (test için)
+    force_choice_sentiment: bool = os.getenv("OPENAI_FORCE_CHOICE_SENTIMENT", "").strip() in ("1", "true", "yes")
 
 
 # Singleton instance'lar; tüm modüller bunları import eder

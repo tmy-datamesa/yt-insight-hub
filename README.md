@@ -1,3 +1,73 @@
+## YT Insight Hub
+
+YouTube yorumları için **uçtan uca yorum analitiği** pipeline’ıdır:
+
+- YouTube API’den yorum ve video istatistiklerini çeker.
+- Ham veriyi temizleyip BigQuery’de **raw / core / ml** katmanlarında saklar.
+- LLM (OpenAI `gpt-4o-mini`) ile her yorum için:
+  - genel duygu (`positive/negative/neutral/mixed`),
+  - konu (`topic`),
+  - aspect bazlı duygu + evidence (örn. `battery`, `storage`, `customer_service`),
+  - stratejik sinyaller (satın alma niyeti, soru, rakip kıyası)
+  üretir.
+- Sonuçları **Streamlit** dashboard ve **Looker Studio** raporlarıyla görselleştirir.
+
+Bu repo, küçük ama gerçekçi bir **conversational/product analytics** ürününün YouTube yorumları için uyarlanmış hali olarak tasarlandı.
+
+---
+
+## Hızlı kurulum
+
+```bash
+git clone <repo-url>
+cd yt-insight-hub
+make venv
+source yt/bin/activate          
+make install
+```
+
+`.env` dosyasına en az şu değişkenleri ekle:
+
+- `GCP_PROJECT_ID` – BigQuery proje ID
+- `YOUTUBE_API_KEY` – YouTube Data API v3 anahtarı
+- `OPENAI_API_KEY` – OpenAI anahtarı
+
+BigQuery dataset ve tabloları oluştur:
+
+```bash
+make bq-setup
+```
+
+---
+
+## Pipeline (özet)
+
+Yeni bir video için tipik akış:
+
+```bash
+make fetch-comments VIDEO_ID=<video_id>   # YouTube yorumlarını ve video_stats'i çek
+make curate-comments                      # Ham → curated (temiz metin, dil, reply bilgisi)
+make run-inference VIDEO_ID=<video_id>    # LLM ile sentiment/topic/aspect + sinyaller
+make streamlit                            # Dashboard'u aç (http://localhost:8501)
+```
+
+Veri katmanları:
+
+- `yt_insight_raw` – ham yorumlar + video istatistikleri
+- `yt_insight_core` – temizlenmiş / normalize edilmiş yorumlar
+- `yt_insight_ml` – LLM çıktıları + raporlama view’leri (`comment_insights_report`, `aspect_sentiment_report`)
+
+---
+
+## Daha fazla detay
+
+Teknik tasarım ve şema detayları için:
+
+- `docs/PROJECT_GUIDE.md` – Baştan sona proje rehberi
+- `docs/ONTOLOGY.md` – Topic / aspect ontolojisi ve alias’lar
+- `docs/MODEL_VERSIONS.md` – LLM versiyonları (v1–v4, prompt chaining + CoT + mixed sentiment)
+- `docs/DATA_SOURCES.md` – BigQuery tabloları ve Streamlit/Looker alan eşlemeleri
+
 # YT Insight Hub
 
 **Looker Dashboard:** [YouTube Comment Insights](https://lookerstudio.google.com/s/gbf4u5q04WM)
@@ -35,7 +105,6 @@ YouTube API  →  raw (comments, video_stats)
                      ↓
               comment_insights_report (view)
               aspect_sentiment_report (view)
-              comment_ngrams (tablo; make build-ngrams)
                      ↓
               Streamlit / Looker Studio
 ```
@@ -75,7 +144,7 @@ make install
 make bq-setup
 ```
 
-Bu komut `yt_insight_raw`, `yt_insight_core`, `yt_insight_ml` dataset’lerini ve içlerindeki tablo/view’leri oluşturur (comments, video_stats, comments_curated, comment_insights, comment_insights_report, aspect_sentiment_report, comment_ngrams DDL’leri `sql/` altındaki dosyalardan okunur).
+Bu komut `yt_insight_raw`, `yt_insight_core`, `yt_insight_ml` dataset’lerini ve içlerindeki tablo/view’leri oluşturur (comments, video_stats, comments_curated, comment_insights, comment_insights_report, aspect_sentiment_report DDL’leri `sql/` altındaki dosyalardan okunur).
 
 ---
 
@@ -94,8 +163,6 @@ make curate-comments
 make run-inference VIDEO_ID=<video_id>
 ```
 
-Örnek: `https://youtu.be/CHvxy63PTXs` için `VIDEO_ID=CHvxy63PTXs`.
-
 Bittikten sonra `make streamlit` ile dashboard’da bu videoyu seçebilirsin.
 
 ---
@@ -112,7 +179,6 @@ Bittikten sonra `make streamlit` ile dashboard’da bu videoyu seçebilirsin.
 | `make curate-comments` | Raw → curated (temizleme + dil tespiti) |
 | `make run-inference VIDEO_ID=xxx` | LLM analizi; sonuçlar `comment_insights` tablosuna yazılır |
 | `make streamlit` | Streamlit dashboard’u başlatır |
-| `make build-ngrams` | Yorum metinlerinden N-gram sayımlarını `comment_ngrams` tablosuna yazar (Looker’da sık ifadeler için) |
 | `make clear-insights` | `comment_insights` tablosunu sıfırlar (geri alınamaz) |
 
 ---
@@ -139,7 +205,7 @@ Bir video için “Bu video için henüz LLM tahmini yok” görürsen, ekrandak
 BigQuery’ye bağlanıp aynı veriyi raporlamak için:
 
 1. Looker Studio → Create → Data source → BigQuery.
-2. Proje → `yt_insight_ml` → `comment_insights_report` (veya `aspect_sentiment_report`, `comment_ngrams`) seç.
+2. Proje → `yt_insight_ml` → `comment_insights_report` (veya `aspect_sentiment_report`) seç.
 3. Rapor oluştur; dimension olarak `video_title`, `topic`, `general_sentiment`, `comment_type`, `intent_category` vb., metrik olarak Record count kullan.
 
 ---
@@ -152,7 +218,7 @@ yt-insight-hub/
 │   ├── config/       # settings, BigQuery kurulumu
 │   ├── ingestion/    # YouTube çekme, curation
 │   ├── inference/    # LLM analizi, ontoloji (topic/aspect listesi)
-│   └── analytics/    # N-gram hesaplama (build_ngrams)
+│   └── analytics/    # (boş; ileride ek analizler için)
 ├── frontend/
 │   └── app.py        # Streamlit uygulaması
 ├── sql/              # BigQuery DDL ve view’ler
