@@ -14,6 +14,8 @@ YouTube yorumları için **uçtan uca yorum analitiği** pipeline’ıdır:
 
 Bu repo, küçük ama gerçekçi bir **conversational/product analytics** ürününün YouTube yorumları için uyarlanmış hali olarak tasarlandı.
 
+<img width="1016" height="1439" alt="image" src="https://github.com/user-attachments/assets/0ca772e6-99ca-4230-817b-6f8842ee7e95" />
+
 ---
 
 ## Hızlı kurulum
